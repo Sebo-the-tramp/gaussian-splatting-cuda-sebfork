@@ -44,6 +44,17 @@ namespace gs {
             return false;
         }
 
+        // Load ring mode screen shader (post-processing approach)
+        try {
+            shader_manager_->loadShader("ring_splat", "screen_quad.vert", "splat_rings.frag", true);
+            ring_splat_shader_ = shader_manager_->getShader("ring_splat");
+            std::cout << "Ring screen shader loaded successfully" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to load ring screen shader: " << e.what() << std::endl;
+            // Continue without ring mode
+            ring_splat_shader_ = nullptr;
+        }
+
         // Initialize screen renderer with interop support if available
 #ifdef CUDA_GL_INTEROP_ENABLED
         screen_renderer_ = std::make_shared<ScreenQuadRendererInterop>(true);
@@ -97,6 +108,15 @@ namespace gs {
         } else {
             std::cout << "Translation gizmo initialized successfully" << std::endl;
         }
+
+        // Initialize default ring rendering configuration
+        ring_config_.mode = SplatRenderMode::CENTERS;
+        ring_config_.ring_size = 0.04f;
+        ring_config_.selection_alpha = 1.0f;
+        ring_config_.show_overlay = true;
+        ring_config_.selected_color = glm::vec4(1.0f, 1.0f, 0.2f, 1.0f);
+        ring_config_.unselected_color = glm::vec4(0.5f, 0.5f, 0.5f, 0.3f);
+        ring_config_.locked_color = glm::vec4(0.8f, 0.2f, 0.2f, 0.8f);
 
         initialized_ = true;
         return true;
@@ -277,6 +297,58 @@ namespace gs {
         auto quadShader = shader_manager_->getShader("screen_quad");
         screen_renderer_->render(quadShader, viewport);
     }
+
+    void SceneRenderer::renderSplatsWithRings(const Viewport& viewport,
+                                              Trainer* trainer,
+                                              const SplatRenderConfig& ring_config,
+                                              std::mutex& splat_mutex) {
+        if (!trainer || !initialized_) {
+            return;
+        }
+
+        // First render normally to get the base splat image
+        auto temp_config = std::make_shared<RenderSettingsPanel::RenderingConfig>();
+        temp_config->scaling_modifier = 1.0f;
+        temp_config->fov = 75.0f;
+
+        renderSplats(viewport, trainer, temp_config, splat_mutex);
+
+        // Then apply ring mode as a post-processing effect
+        if (!ring_splat_shader_) {
+            std::cerr << "Ring shader not available" << std::endl;
+            return;
+        }
+
+        // Apply ring post-processing
+        OpenGLStateManager::StateGuard guard(getGLStateManager());
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        ring_splat_shader_->bind();
+
+        // Set ring-specific uniforms
+        ring_splat_shader_->set_uniform("renderMode", static_cast<int>(ring_config.mode));
+        ring_splat_shader_->set_uniform("ringSize", ring_config.ring_size);
+        ring_splat_shader_->set_uniform("selectionAlpha", ring_config.selection_alpha);
+        ring_splat_shader_->set_uniform("showOverlay", ring_config.show_overlay);
+        ring_splat_shader_->set_uniform("selectedColor", ring_config.selected_color);
+        ring_splat_shader_->set_uniform("unselectedColor", ring_config.unselected_color);
+        ring_splat_shader_->set_uniform("lockedColor", ring_config.locked_color);
+
+        // Bind the rendered texture
+        ring_splat_shader_->set_uniform("screenTexture", 0);
+
+        // Render the post-processed result
+        screen_renderer_->render(ring_splat_shader_, viewport);
+
+        ring_splat_shader_->unbind();
+
+        std::cout << "Ring mode post-processing completed (mode: "
+                  << (ring_config.mode == SplatRenderMode::RINGS ? "RINGS" : "CENTERS")
+                  << ", ring_size: " << ring_config.ring_size << ")" << std::endl;
+    }
+
+    // Removed setupRingSplatUniforms - no longer needed with post-processing approach
 
     void SceneRenderer::renderImageOverlay(const Viewport& viewport,
                                            const torch::Tensor& image,

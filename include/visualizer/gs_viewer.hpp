@@ -7,6 +7,7 @@
 #include "visualizer/gui/dataset_viewer_panel.hpp"
 #include "visualizer/gui/gui_manager.hpp"
 #include "visualizer/gui/render_settings_panel.hpp"
+#include "visualizer/gui/ring_mode_panel.hpp"
 #include "visualizer/gui/training_control_panel.hpp"
 #include "visualizer/gui/visualization_panel.hpp"
 #include "visualizer/input_handler.hpp"
@@ -68,6 +69,15 @@ namespace gs {
         bool hasTrainer() const { return trainer_ != nullptr; }
         bool hasDataset() const { return dataset_ != nullptr; }
 
+        // Ring mode controls
+        void toggleRingMode() {
+            use_ring_mode_ = !use_ring_mode_;
+            std::cout << "Ring mode " << (use_ring_mode_ ? "enabled" : "disabled") << std::endl;
+        }
+
+        bool isRingModeEnabled() const { return use_ring_mode_; }
+        void setRingModeEnabled(bool enabled) { use_ring_mode_ = enabled; }
+
     protected:
         // Window and context initialization
         bool initializeWindow();
@@ -121,6 +131,9 @@ namespace gs {
         SceneRenderer::RenderSettings render_settings_;
         std::shared_ptr<RenderingConfig> render_config_;
 
+        // Ring mode
+        bool use_ring_mode_ = false;
+
         // Scene info
         glm::vec3 scene_center_{0.0f};
         float scene_radius_{1.0f};
@@ -133,6 +146,7 @@ namespace gs {
         std::shared_ptr<CameraControlPanel> camera_panel_;
         std::shared_ptr<VisualizationPanel> viz_panel_;
         std::shared_ptr<DatasetViewerPanel> dataset_panel_;
+        std::shared_ptr<RingModePanel> ring_panel_;
 
         // Help overlay
         bool show_help_ = false;

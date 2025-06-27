@@ -26,6 +26,11 @@ namespace gs {
             TRANSLATION
         };
 
+        enum class SplatRenderMode {
+            CENTERS, // Normal filled splats
+            RINGS    // Hollow ring splats
+        };
+
         struct RenderSettings {
             bool show_grid;
             bool show_view_cube;
@@ -41,6 +46,16 @@ namespace gs {
                   grid_plane(InfiniteGridRenderer::GridPlane::XZ) {}
         };
 
+        struct SplatRenderConfig {
+            SplatRenderMode mode = SplatRenderMode::CENTERS;
+            float ring_size = 0.04f;      // Ring thickness (0.0 to 1.0)
+            float selection_alpha = 1.0f; // Alpha for selected splats
+            bool show_overlay = true;     // Show selection overlay
+            glm::vec4 selected_color = glm::vec4(1.0f, 1.0f, 0.2f, 1.0f);
+            glm::vec4 unselected_color = glm::vec4(0.5f, 0.5f, 0.5f, 0.3f);
+            glm::vec4 locked_color = glm::vec4(0.8f, 0.2f, 0.2f, 0.8f);
+        };
+
         SceneRenderer();
         ~SceneRenderer();
 
@@ -51,6 +66,11 @@ namespace gs {
                           Trainer* trainer,
                           std::shared_ptr<RenderSettingsPanel::RenderingConfig> config,
                           std::mutex& splat_mutex);
+
+        void renderSplatsWithRings(const Viewport& viewport,
+                                   Trainer* trainer,
+                                   const SplatRenderConfig& ring_config,
+                                   std::mutex& splat_mutex);
 
         // Individual component renders
         void renderGrid(const Viewport& viewport, const RenderSettings& settings);
@@ -79,6 +99,27 @@ namespace gs {
         TranslationGizmo* getTranslationGizmo() { return translation_gizmo_.get(); }
         void updateGizmoPosition(const glm::vec3& position);
 
+        // Ring mode controls
+        void setRingMode(SplatRenderMode mode) { ring_config_.mode = mode; }
+        SplatRenderMode getRingMode() const { return ring_config_.mode; }
+        void setRingSize(float size) { ring_config_.ring_size = glm::clamp(size, 0.0f, 1.0f); }
+        float getRingSize() const { return ring_config_.ring_size; }
+        void setRingSelectionAlpha(float alpha) { ring_config_.selection_alpha = glm::clamp(alpha, 0.0f, 1.0f); }
+        float getRingSelectionAlpha() const { return ring_config_.selection_alpha; }
+        void setRingShowOverlay(bool show) { ring_config_.show_overlay = show; }
+        bool getRingShowOverlay() const { return ring_config_.show_overlay; }
+
+        void setRingSelectedColor(const glm::vec4& color) { ring_config_.selected_color = color; }
+        void setRingUnselectedColor(const glm::vec4& color) { ring_config_.unselected_color = color; }
+        void setRingLockedColor(const glm::vec4& color) { ring_config_.locked_color = color; }
+
+        glm::vec4 getRingSelectedColor() const { return ring_config_.selected_color; }
+        glm::vec4 getRingUnselectedColor() const { return ring_config_.unselected_color; }
+        glm::vec4 getRingLockedColor() const { return ring_config_.locked_color; }
+
+        SplatRenderConfig& getRingConfig() { return ring_config_; }
+        const SplatRenderConfig& getRingConfig() const { return ring_config_; }
+
         // Getters for GUI interaction
         InfiniteGridRenderer* getGridRenderer() { return grid_renderer_.get(); }
         ViewCubeRenderer* getViewCubeRenderer() { return view_cube_renderer_.get(); }
@@ -87,6 +128,8 @@ namespace gs {
         std::shared_ptr<ScreenQuadRenderer> getScreenRenderer() { return screen_renderer_; }
 
     private:
+        // Ring mode rendering using post-processing approach
+
         // Renderers
         std::unique_ptr<ShaderManager> shader_manager_;
         std::unique_ptr<InfiniteGridRenderer> grid_renderer_;
@@ -96,6 +139,10 @@ namespace gs {
         std::unique_ptr<TranslationGizmo> translation_gizmo_;
         GizmoMode gizmo_mode_ = GizmoMode::NONE;
         std::shared_ptr<ScreenQuadRenderer> screen_renderer_;
+
+        // Ring mode rendering
+        std::shared_ptr<Shader> ring_splat_shader_;
+        SplatRenderConfig ring_config_;
 
         // Scene info
         glm::vec3 scene_center_{0.0f};

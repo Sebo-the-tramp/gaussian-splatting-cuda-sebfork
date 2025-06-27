@@ -313,8 +313,9 @@ namespace gs {
             // Set gizmo hit test for both rotation and translation
             getInputHandler()->setGizmoHitTest([this](double x, double y) -> int {
                 auto renderer = getSceneRenderer();
-                if (!renderer)
+                if (!renderer) {
                     return -1;
+                }
 
                 // Check rotation gizmo
                 if (renderer->getGizmoMode() == SceneRenderer::GizmoMode::ROTATION) {
@@ -438,6 +439,7 @@ namespace gs {
             gui->removePanel("Camera Controls");
             gui->removePanel("Visualization Settings");
             gui->removePanel("Dataset Viewer");
+            gui->removePanel("Ring Mode");
         }
 
         try {
@@ -464,6 +466,11 @@ namespace gs {
 
             gui->addPanel(camera_panel_);
             gui->addPanel(viz_panel_);
+
+            // Add ring mode panel
+            std::cout << "Creating ring mode panel..." << std::endl;
+            ring_panel_ = std::make_shared<RingModePanel>(getSceneRenderer(), &use_ring_mode_);
+            gui->addPanel(ring_panel_);
 
             // Add dataset viewer if dataset is available
             if (dataset_ && getSceneRenderer()->getCameraRenderer()) {
@@ -499,6 +506,13 @@ namespace gs {
                 render_settings_.show_cameras = !render_settings_.show_cameras;
             },
             "Toggle camera frustums");
+
+        // Toggle ring mode
+        input->addKeyBinding(
+            GLFW_KEY_Q, [this]() {
+                toggleRingMode();
+            },
+            "Toggle ring mode");
 
         // Toggle rotation gizmo
         input->addKeyBinding(
@@ -687,11 +701,25 @@ namespace gs {
             renderer->renderCameras(getViewport(), highlight_idx);
         }
 
-        // 3. Draw splats if trainer is available
+        // 3. Draw splats - THIS IS WHERE RING MODE IS USED
         if (trainer_) {
-            // Clear depth buffer so splats render on top
             glClear(GL_DEPTH_BUFFER_BIT);
-            renderer->renderSplats(getViewport(), trainer_, render_config_, splat_mutex_);
+
+            if (use_ring_mode_) {
+                // Use ring rendering
+                renderer->renderSplatsWithRings(
+                    getViewport(),
+                    trainer_,
+                    renderer->getRingConfig(),
+                    splat_mutex_);
+            } else {
+                // Use original rendering
+                renderer->renderSplats(
+                    getViewport(),
+                    trainer_,
+                    render_config_,
+                    splat_mutex_);
+            }
         }
 
         // 4. Draw rotation gizmo
@@ -744,11 +772,24 @@ namespace gs {
         ImGui::Separator();
         ImGui::BulletText("G: Toggle grid");
         ImGui::BulletText("C: Toggle camera frustums");
+        ImGui::BulletText("Q: Toggle ring mode");
         ImGui::BulletText("R: Toggle rotation gizmo");
         ImGui::BulletText("T: Toggle translation gizmo");
         ImGui::BulletText("Left/Right Arrow: Navigate cameras");
         ImGui::BulletText("ESC: Close image overlay");
         ImGui::BulletText("?: Toggle this help");
+
+        // Show ring mode status
+        if (use_ring_mode_) {
+            ImGui::Spacing();
+            ImGui::Text("Ring Mode Active:");
+            ImGui::Separator();
+            auto mode = getSceneRenderer()->getRingMode();
+            ImGui::BulletText("Mode: %s",
+                              mode == SceneRenderer::SplatRenderMode::RINGS ? "Rings" : "Centers");
+            ImGui::BulletText("Ring Size: %.3f", getSceneRenderer()->getRingSize());
+            ImGui::BulletText("Use Ring Mode panel for more settings");
+        }
 
         if (getSceneRenderer()) {
             auto mode = getSceneRenderer()->getGizmoMode();

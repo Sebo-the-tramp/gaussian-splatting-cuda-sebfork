@@ -212,6 +212,7 @@ set(VISUALIZER_SOURCES
         src/visualizer/gui/render_settings_panel.cpp
         src/visualizer/gui/camera_control_panel.cpp
         src/visualizer/gui/visualization_panel.cpp
+        src/visualizer/gui/ring_mode_panel.cpp
         src/visualizer/camera_frustum_renderer.cpp
         src/visualizer/gui/dataset_viewer_panel.cpp
         src/visualizer/scene_renderer.cpp
